@@ -1,12 +1,15 @@
 import requests
 from bs4 import BeautifulSoup
 from typing import List, Dict
-from .base import BaseScraper
+
+try:
+    from .base import BaseScraper
+except Exception:
+    from base import BaseScraper
 
 
 class RomHustlerScraper(BaseScraper):
     name = "RomHustler"
-
     SEARCH_URL = "https://romhustler.org/roms/search?query={query}"
 
     def search(self, query: str) -> List[Dict]:
@@ -22,52 +25,37 @@ class RomHustlerScraper(BaseScraper):
             resp = requests.get(url, headers=headers, timeout=10)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "html.parser")
-            table = soup.find("table", {"class": "table-roms"})
-            if table:
-                rows = table.find_all("tr")
-            else:
-                # Fallback: look for anchors pointing to individual ROM pages within #results box
-                rows = []
-                for a in soup.select("div#results a[href^='/rom']"):
-                    fake_row = soup.new_tag("tr")
-                    td_link = soup.new_tag("td")
-                    td_link.append(a)
-                    fake_row.append(td_link)
-                    rows.append(fake_row)
 
-            for row in rows:
-                a = row.find("a", href=True)
-                if not a:
+            # Look for any anchor tag with href starting with "/rom/"
+            anchors = soup.find_all("a", href=True)
+            for a in anchors:
+                href = a["href"]
+                if not href.startswith("https://romhustler.org/rom/"):
                     continue
+
                 title = a.get_text(strip=True)
                 if not title:
                     continue
-                href = a["href"]
-                size_td = None
-                tds = row.find_all("td")
-                if len(tds) > 1:
-                    size_td = tds[1].get_text(strip=True)
 
-                # Extract console code from path '/rom/<console>/...' pattern
-                console_code = None
+                # Construct full URL if missing the base URL
+                full_url = f"https://romhustler.org{href}" if not href.startswith("https://romhustler.org") else href
+
+                # Extract console code from URL (e.g., /rom/wii/... should give 'wii')
                 parts = href.strip("/").split("/")
-                if len(parts) >= 3 and parts[0] == "rom":
-                    console_code = parts[1]
+                console_code = parts[4] if len(parts) >= 6 and parts[3] == "rom" else None
+                print(parts[5], parts[4], len(parts))
+                results.append({
+                    "title": title,
+                    "url": full_url,
+                    "source": self.name,
+                    "size": None,  # Size isn't available in this version
+                    "console": console_code,
+                })
 
-                results.append(
-                    {
-                        "title": title,
-                        "url": f"https://romhustler.org{href}",
-                        "source": self.name,
-                        "size": size_td,
-                        "console": console_code,
-                    }
-                )
-        except Exception:
-            # Fail silently to avoid crashing the whole search
-            pass
+        except Exception as e:
+            print(f"Error in RomHustlerScraper: {e}")
 
-        # Deduplicate identical titles (same link may appear multiple times)
+        # Deduplicate based on title + URL
         seen = set()
         unique: List[Dict] = []
         for item in results:
@@ -77,4 +65,11 @@ class RomHustlerScraper(BaseScraper):
             seen.add(key)
             unique.append(item)
 
-        return unique 
+        return unique
+
+
+if __name__ == "__main__":
+    scraper = RomHustlerScraper()
+    results = scraper.search("New Super Mario Bros")
+    for result in results:
+        print(result)
