@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>{{ game.title }}</h2>
+{% if downloaded %}
+  <div class="alert alert-success">Already downloaded and available in your library.</div>
+{% endif %}
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Source</th>
+      <th>Size</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for src in game.sources %}
+      <tr>
+        <td>{{ src.source }}</td>
+        <td>{{ src.size if src.size else 'Unknown' }}</td>
+        <td>
+          {% if downloaded %}
+            <button class="btn btn-secondary" disabled>Already downloaded</button>
+          {% else %}
+            <a href="{{ url_for('download', url=src.url, title=game.title) }}" class="btn btn-primary">Download</a>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %} 

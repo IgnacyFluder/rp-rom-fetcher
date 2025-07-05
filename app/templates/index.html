@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <h1 class="text-center mb-4">Search for a Game</h1>
+    <form action="{{ url_for('search') }}" method="get" class="d-flex">
+      <input type="text" class="form-control me-2" name="q" placeholder="Enter game title" required />
+      <button class="btn btn-primary" type="submit">Search</button>
+    </form>
+  </div>
+</div>
+{% endblock %} 
