@@ -21,7 +21,7 @@
           {% if downloaded %}
             <button class="btn btn-secondary" disabled>Already downloaded</button>
           {% else %}
-            <a href="{{ url_for('download', url=src.url, title=game.title) }}" class="btn btn-primary">Download</a>
+            <a href="{{ url_for('download', url=src.url, title=game.title, console=game.console) }}" class="btn btn-primary">Download</a>
           {% endif %}
         </td>
       </tr>

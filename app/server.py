@@ -12,7 +12,8 @@ from .utils import (
     is_downloaded,
     get_downloaded_games,
     safe_filename,
-    LIBRARY_DIR,
+    ROMS_BASE_DIR,
+    console_to_dir,
 )
 
 app = Flask(__name__)
@@ -77,6 +78,7 @@ def _download_file(url: str, dest_path: str):
 def download():
     url = request.args.get("url")
     title = request.args.get("title")
+    console = request.args.get("console")  # optional hint from scraper/UI
     if not url or not title:
         flash("Invalid download request.")
         return redirect(url_for("index"))
@@ -85,7 +87,11 @@ def download():
         flash("You already downloaded this game.")
         return redirect(url_for("game_detail", slug=slug))
     filename = safe_filename(f"{slug}{os.path.splitext(url)[-1] or '.zip'}")
-    dest_path = os.path.join(LIBRARY_DIR, filename)
+
+    console_dir_name = console_to_dir(console) if console else "unsorted"
+    dest_dir = os.path.join(ROMS_BASE_DIR, console_dir_name)
+    os.makedirs(dest_dir, exist_ok=True)
+    dest_path = os.path.join(dest_dir, filename)
     flash("Download started in background. It may take a while depending on file size.")
     threading.Thread(target=_download_file, args=(url, dest_path), daemon=True).start()
     return redirect(url_for("game_detail", slug=slug))
@@ -93,19 +99,26 @@ def download():
 
 @app.route("/library")
 def library():
-    files = os.listdir(LIBRARY_DIR)
-    # Build objects: title, slug, filename
     games = []
-    for fname in files:
-        slug = fname.split(".")[0]
-        title = slug.replace("-", " ").title()
-        games.append({"title": title, "slug": slug, "filename": fname})
+    for console in os.listdir(ROMS_BASE_DIR):
+        console_path = os.path.join(ROMS_BASE_DIR, console)
+        if not os.path.isdir(console_path):
+            continue
+        for fname in os.listdir(console_path):
+            slug = fname.split(".")[0]
+            title = slug.replace("-", " ").title()
+            games.append({
+                "title": title,
+                "slug": slug,
+                "filename": fname,
+                "console": console,
+            })
     return render_template("library.html", games=games)
 
 
-@app.route("/delete/<path:filename>", methods=["POST"])
-def delete_file(filename):
-    path = os.path.join(LIBRARY_DIR, filename)
+@app.route("/delete/<console>/<path:filename>", methods=["POST"])
+def delete_file(console, filename):
+    path = os.path.join(ROMS_BASE_DIR, console, filename)
     if os.path.exists(path):
         os.remove(path)
         flash("Game deleted successfully.")
@@ -114,9 +127,10 @@ def delete_file(filename):
     return redirect(url_for("library"))
 
 
-@app.route("/library/downloads/<path:filename>")
-def serve_download(filename):
-    return send_from_directory(LIBRARY_DIR, filename, as_attachment=True)
+@app.route("/library/downloads/<console>/<path:filename>")
+def serve_download(console, filename):
+    directory = os.path.join(ROMS_BASE_DIR, console)
+    return send_from_directory(directory, filename, as_attachment=True)
 
 
 if __name__ == "__main__":
