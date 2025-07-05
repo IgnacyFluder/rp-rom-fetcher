@@ -1,7 +1,11 @@
 from .romhustler import RomHustlerScraper
 from .vimm import VimmScraper
-from .archiveorg import ArchiveOrgScraper
+
+from .wowroms import WowRomsScraper
 
 SCRAPERS = [
-    ArchiveOrgScraper(),
+    RomHustlerScraper(),
+    VimmScraper(),
+
+    WowRomsScraper(),
 ] 
