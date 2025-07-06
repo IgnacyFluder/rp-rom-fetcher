@@ -14,6 +14,7 @@ from .utils import (
     safe_filename,
     ROMS_BASE_DIR,
     console_to_dir,
+    is_downloadable,
 )
 
 app = Flask(__name__)
@@ -59,15 +60,53 @@ def game_detail(slug):
     return render_template("game.html", game=game, downloaded=downloaded)
 
 
-def _download_file(url: str, dest_path: str):
+import os
+import threading
+import requests
+from urllib.parse import unquote
+from flask import flash, redirect, url_for
+
+def _get_filename_from_cd(content_disposition: str) -> str:
+    """
+    Extract filename from Content-Disposition header.
+    """
+    if not content_disposition:
+        return None
+    parts = content_disposition.split(';')
+    for part in parts:
+        if "filename=" in part:
+            filename = part.split("filename=")[-1].strip(' "\'')
+            return unquote(filename)
+    return None
+
+def _download_file(url: str, dest_dir: str, slug: str = None, console: str = None):
     """Stream download to disk in a background thread."""
     try:
         with requests.get(url, stream=True, timeout=30) as r:
             r.raise_for_status()
+
+            # Get filename from Content-Disposition or fallback to URL
+            content_disposition = r.headers.get("Content-Disposition")
+            filename = _get_filename_from_cd(content_disposition)
+
+            if not filename:
+                filename = os.path.basename(url.split("?")[0]) or f"{slug}.zip"
+
+            if slug:
+                filename = safe_filename(f"{slug}{os.path.splitext(filename)[-1]}")
+
+            # Create directory
+            console_dir_name = console_to_dir(console) if console else "unsorted"
+            full_dir = os.path.join(ROMS_BASE_DIR, console_dir_name)
+            os.makedirs(full_dir, exist_ok=True)
+
+            # Write file
+            dest_path = os.path.join(full_dir, filename)
             with open(dest_path, "wb") as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
+
     except Exception as e:
         print(f"Failed download {url}: {e}")
         if os.path.exists(dest_path):
@@ -79,21 +118,42 @@ def download():
     url = request.args.get("url")
     title = request.args.get("title")
     console = request.args.get("console")  # optional hint from scraper/UI
+    scraper_name = request.args.get("source")
+
     if not url or not title:
         flash("Invalid download request.")
         return redirect(url_for("index"))
+    
     slug = slugify_title(title)
     if is_downloaded(slug):
         flash("You already downloaded this game.")
         return redirect(url_for("game_detail", slug=slug))
-    filename = safe_filename(f"{slug}{os.path.splitext(url)[-1] or '.zip'}")
+    
+    download_url = None
+
+    for scraper in SCRAPERS:
+        if scraper.name == scraper_name:
+            try:
+                download_url = scraper.get_download_url(url)
+            except TypeError:
+                flash("This game is restricted, download did not start.")
+                return redirect(url_for("game_detail", slug=slug))
+            except ValueError:
+                flash("This game is restricted, download did not start.")
+                return redirect(url_for("game_detail", slug=slug))
+            except Exception as e:
+                flash(f"Error downloading game: {str(e)}")
+                return redirect(url_for("game_detail", slug=slug))
 
     console_dir_name = console_to_dir(console) if console else "unsorted"
     dest_dir = os.path.join(ROMS_BASE_DIR, console_dir_name)
+
     os.makedirs(dest_dir, exist_ok=True)
-    dest_path = os.path.join(dest_dir, filename)
+    # if not is_downloadable(url):
+    #     flash("This game is restricted, download did not start.")
+    #     return redirect(url_for("game_detail", slug=slug))
     flash("Download started in background. It may take a while depending on file size.")
-    threading.Thread(target=_download_file, args=(url, dest_path), daemon=True).start()
+    threading.Thread(target=_download_file, args=(download_url, ROMS_BASE_DIR), kwargs={"slug": slug, "console": console}, daemon=True).start()
     return redirect(url_for("game_detail", slug=slug))
 
 

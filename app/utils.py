@@ -1,6 +1,8 @@
 import os
 from typing import List, Dict
 from slugify import slugify
+import requests
+from bs4 import BeautifulSoup
 
 # Base RetroPie roms directory (can be overridden via env)
 ROMS_BASE_DIR = os.environ.get("ROMS_BASE_DIR", os.path.expanduser("~/RetroPie/roms"))
@@ -99,3 +101,69 @@ def safe_filename(filename: str) -> str:
 def console_to_dir(console: str) -> str:
     """Return the RetroPie directory for a given console code."""
     return CONSOLE_DIR_MAP.get(console.lower(), "unsorted") 
+
+
+def is_downloadable(url: str) -> bool:
+    try:
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+            )
+        }
+        resp = requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        # Find all table rows
+        for tr in soup.find_all("tr"):
+            tds = tr.find_all("td")
+            if len(tds) != 2:
+                continue
+
+            strong = tds[0].find("strong")
+            if strong and strong.get_text(strip=True).lower() == "can download":
+                value = tds[1].get_text(strip=True).lower()
+                return value == "yes"
+
+        return False  # "Can Download" not found
+
+    except Exception as e:
+        print(f"Error checking downloadability: {e}")
+        return False
+
+
+def normalize_console_name(console_name: str) -> str:
+    name_map = {
+        "Nintendo Entertainment System": "NES",
+        "Super Nintendo Entertainment System": "SNES",
+        "Nintendo 64": "N64",
+        "Nintendo Game Boy": "Game Boy",
+        "Nintendo Game Boy Color": "GBC",
+        "Nintendo Game Boy Advance": "GBA",
+        "Nintendo DS": "DS",
+        "Nintendo 3DS": "3DS",
+        "Nintendo Switch": "Switch",
+        "Sony PlayStation": "PS1",
+        "Sony PlayStation 2": "PS2",
+        "Sony PlayStation 3": "PS3",
+        "Sony PlayStation Portable": "PSP",
+        "Microsoft Xbox": "Xbox",
+        "Microsoft Xbox 360": "Xbox 360",
+        "Sega Genesis": "Genesis",
+        "Sega Mega Drive": "Genesis",
+        "Sega Master System": "Master System",
+        "Sega Dreamcast": "Dreamcast",
+        "Atari 2600": "Atari 2600",
+        "Atari 5200": "Atari 5200",
+        "Atari 7800": "Atari 7800",
+        "Atari Jaguar": "Jaguar",
+        "Commodore 64": "C64",
+        "Neo Geo": "Neo Geo",
+        "TurboGrafx-16": "TG16",
+        "PC Engine": "TG16",
+        "MAME": "MAME",
+    }
+
+    return name_map.get(console_name.strip(), console_name.strip().upper())

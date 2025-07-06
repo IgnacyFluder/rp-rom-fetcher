@@ -5,4 +5,5 @@ from .wowroms import WowRomsScraper
 
 SCRAPERS = [
     RomHustlerScraper(),
+    WowRomsScraper(),
 ] 
