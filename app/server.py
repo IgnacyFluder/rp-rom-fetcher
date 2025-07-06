@@ -96,6 +96,12 @@ def _get_filename_from_cd(content_disposition: str) -> str:
 
 def _download_file(url: str, dest_dir: str, slug: str = None, console: str = None):
     """Stream download to disk in a background thread."""
+    if not url:
+        print(f"[_download_file] No URL provided for slug={slug}. Aborting thread.")
+        return
+
+    dest_path = None  # track destination for cleanup on failure
+
     try:
         with requests.get(url, stream=True, timeout=30) as r:
             r.raise_for_status()
@@ -124,7 +130,8 @@ def _download_file(url: str, dest_dir: str, slug: str = None, console: str = Non
 
     except Exception as e:
         print(f"Failed download {url}: {e}")
-        if os.path.exists(dest_path):
+        # Clean up partial file if created
+        if dest_path and os.path.exists(dest_path):
             os.remove(dest_path)
 
 
@@ -159,6 +166,11 @@ def download():
             except Exception as e:
                 flash(f"Error downloading game: {str(e)}")
                 return redirect(url_for("game_detail", slug=slug))
+
+    # If scraper returned no download URL, abort gracefully
+    if not download_url:
+        flash("Could not obtain download link for this game.")
+        return redirect(url_for("game_detail", slug=slug))
 
     console_dir_name = console_to_dir(console) if console else "unsorted"
     dest_dir = os.path.join(ROMS_BASE_DIR, console_dir_name)
