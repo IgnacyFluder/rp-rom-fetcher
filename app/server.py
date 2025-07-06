@@ -1,6 +1,7 @@
 import os
 import threading
 from urllib.parse import quote_plus, unquote_plus
+import json
 
 import requests
 from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory
@@ -39,23 +40,37 @@ def search():
         all_results.extend(scraper.search(query))
     games = unify_results(all_results)
     downloaded = set(get_downloaded_games())
-    # Flag already downloaded
+    # Flag already downloaded and pre-encode game data for fast access in detail view
     for game in games:
         game["downloaded"] = game["slug"] in downloaded
+        # Add encoded representation to avoid re-scraping later
+        game["encoded"] = quote_plus(json.dumps(game))
     return render_template("search.html", query=query, games=games)
 
 
 @app.route("/game/<slug>")
 def game_detail(slug):
-    title = slug.replace("-", " ")  # crude, but good enough for re-search
-    all_results = []
-    for scraper in SCRAPERS:
-        all_results.extend(scraper.search(title))
-    games = unify_results(all_results)
-    game = next((g for g in games if g["slug"] == slug), None)
-    if not game:
-        flash("Game not found. Try searching again.")
-        return redirect(url_for("index"))
+    # If full game data provided via query param, avoid expensive re-search
+    data_param = request.args.get("data")
+    if data_param:
+        try:
+            game = json.loads(unquote_plus(data_param))
+        except Exception:
+            game = None
+    else:
+        game = None
+
+    if game is None:
+        title = slug.replace("-", " ")  # crude, but good enough for re-search
+        all_results = []
+        for scraper in SCRAPERS:
+            all_results.extend(scraper.search(title))
+        games = unify_results(all_results)
+        game = next((g for g in games if g["slug"] == slug), None)
+        if not game:
+            flash("Game not found. Try searching again.")
+            return redirect(url_for("index"))
+
     downloaded = is_downloaded(slug)
     return render_template("game.html", game=game, downloaded=downloaded)
 

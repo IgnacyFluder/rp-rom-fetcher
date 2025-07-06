@@ -6,7 +6,7 @@
 {% else %}
   <div class="list-group">
     {% for game in games %}
-      <a href="{{ url_for('game_detail', slug=game.slug) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+      <a href="{{ url_for('game_detail', slug=game.slug, data=game.encoded) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
         {{ game.title }}
         {% if game.downloaded %}
           <span class="badge bg-success">In Library</span>
