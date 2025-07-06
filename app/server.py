@@ -154,6 +154,8 @@ def download():
     download_url = None
 
     for scraper in SCRAPERS:
+        print(scraper.name)
+        print(scraper_name)
         if scraper.name == scraper_name:
             try:
                 download_url = scraper.get_download_url(url)
