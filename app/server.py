@@ -157,6 +157,7 @@ def download():
         if scraper.name == scraper_name:
             try:
                 download_url = scraper.get_download_url(url)
+                print(download_url)
             except TypeError:
                 flash("This game is restricted, download did not start.")
                 return redirect(url_for("game_detail", slug=slug))
